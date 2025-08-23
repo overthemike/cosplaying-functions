@@ -1,104 +1,121 @@
+# Cosplay & Wiretapping: JavaScript’s Hidden Superpowers
+
+A tiny **teaching demo** that shows how JavaScript can:
+ - **Cosplay** as primitives via `Symbol.toPrimitive`
+ - **Wiretap** object access with `Proxy`
+ - Create **live primitive references** that keep resolving against the *current* state—even after object replacement
+
+**This is not a production library.** It’s a self-contained demo to learn how these tricks work.
+
+---
+
 ## 🚀 Quick Start
 
-```bash
+~~~bash
+# If files live in ./src
 node src/main.js
-```
 
-That's it! No dependencies, no build steps. Just pure JavaScript magic. Watch the console output to see exactly what's happening under the hood.
+# If files live at the repo root, use:
+# node main.js
+~~~
 
-## 🪄 The "Impossible" Behavior
+- No dependencies, no build steps—just Node.
+- Watch the console output; it logs what’s happening under the hood.
 
-This system makes this seemingly impossible code work:
+---
 
-```javascript
+## 🪄 The “Impossible” Behavior (What you’ll see)
+
+~~~js
+import { createLiveTrackingProxy, computed } from "./reactive.js";
+
 const state = createLiveTrackingProxy({
-  user: { name: "Alice", theme: "dark" }
+  user: { firstName: "Ada", lastName: "Lovelace" },
 });
 
-const userName = state.user.name;    // "Alice"
-const userTheme = state.user.theme;  // "dark"
+// Extract once…
+const first = state.user.firstName;   // <-- “live primitive”
+const last  = state.user.lastName;
 
-// Later... completely replace the user object
-state.user = { name: "Bob", theme: "light" };
+// Use as if they were strings…
+console.log(`${first} ${last}`); // "Ada Lovelace"
 
-console.log(userName);  // "Bob" 🤯
-console.log(userTheme); // "light" 🤯
+// Now replace the whole subtree:
+state.user = { firstName: "Grace", lastName: "Hopper" };
+
+// …the *previously extracted variables* still resolve to the new values:
+console.log(`${first} ${last}`); // "Grace Hopper"
+
+// Computeds track dependencies by path:
+computed("fullName", () => `${first} ${last}`);
+~~~
+
+**Why it feels impossible:** `first` and `last` are *functions* masquerading as primitives. When coerced (string template / `+` / comparison), they read the *current* value at the recorded path in the original state object. Proxies wiretap property access and return these “live” sentinels instead of raw strings.
+
+---
+
+## 🧭 Folder Map
+```bash
+src/
+  reactive.js # the example implementation (proxy + live primitive + computed graph)
+  main.js     # runnable demo covering direct/chained extraction, replacement, computeds, async reads
 ```
 
-How do `userName` and `userTheme` get the new values? They look like regular variables, but they're secretly shape-shifting functions that know their path back to the root state.
+---
 
-## 🔍 What's Happening Under the Hood
+## 🧩 How It Works (90-second tour)
 
-### 1. Cosplaying Functions
-When you access `state.user.name`, you don't get a string. You get a function that:
-- Can be called like a function: `userName()`  
-- Transforms into a primitive when needed: `"Hello " + userName`
-- Always reads from the original state using its remembered path
-- Uses `Symbol.toPrimitive` to seamlessly convert in any context
+1. **Proxy wiretaps** every `get` and returns either:
+   - a new proxy (for objects), or
+   - a **live primitive** function (for leaf values).
+2. The live primitive has a `Symbol.toPrimitive` that:
+   - records a dependency on the current **path** (e.g., `user.firstName`),
+   - then reads the latest value from the *original* state object.
+3. **Computed** values run inside a “current computation” context, so any coercion of live primitives during that run gets recorded in a dependency graph.
+4. When the state changes (including **object replacement**), we figure out which paths were touched and rerun any computeds that depend on matching prefixes.
+5. Re-coercing a previously extracted live primitive always resolves the newest value at its path.
 
-### 2. Proxy Chain
-Each proxy in the chain remembers its ancestry:
-- `state.user` creates a proxy at path `['user']`
-- `state.user.profile` creates a proxy at path `['user', 'profile']`  
-- `state.user.profile.name` returns a live function at path `['user', 'profile', 'name']`
+---
 
-### 3. Automatic Dependency Tracking
-The system tracks which variables are accessed during computations and automatically updates them when dependencies change.
+## 🧪 What to Play With
 
-## 🎮 Try It Out
+- Replace `state.user`, then log previously extracted variables.
+- Build a computed that depends on another computed (e.g., `greeting` depends on `fullName`).
+- Change nested fields (`state.user.firstName = "Linus"`) and watch recomputes.
+- Try async reassignments and observe dependency tracking.
 
-The demo shows several patterns that all work:
+---
 
-**Direct Extraction:**
-```javascript
-const firstName = state.user.firstName;
-const theme = state.user.profile.settings.theme;
-```
+## ⚠️ Limitations (by design; this is a teaching demo)
 
-**Chained Extraction (Revolutionary!):**
-```javascript
-const user = state.user;           // Proxy for ['user']
-const profile = user.profile;      // Proxy for ['user', 'profile']  
-const settings = profile.settings; // Proxy for ['user', 'profile', 'settings']
-const theme = settings.theme;      // Live function for ['user', 'profile', 'settings', 'theme']
-```
+- **TypeScript** can’t model this dynamic coercion precisely; types collapse to `any` quickly.
+- `JSON.stringify` on a live primitive (which is a function) won’t give you the string value unless you coerce first.
+- **Equality**: strict `===` on a live primitive vs literal string will be `false` (one is a function). Coerce first (template literal / `String(live)`), or expose a `.value` getter if you add one.
+- **Arrays**: index/`length` changes can feel noisy; a production system would normalize notifications to the collection path.
+- **Not for production**—debuggability and maintainability drop off fast with heavy meta-programming. The point here is learning.
 
-**Computed Values:**
-```javascript
-computed('fullName', () => `${firstName} ${lastName}`);
-// Automatically updates when firstName or lastName change!
-```
+---
 
-All of these patterns create variables that survive complete object replacement.
+## 🙋 FAQ
 
-## 🔧 Key Features
+**Q: Why do “strings” I pulled earlier update after I replace the object?**  
+They aren’t strings—they’re *functions* with `Symbol.toPrimitive`. Coercion makes them look/behave like strings, but each use re-reads the current value at the recorded path.
 
-- **Live Variables**: Variables stay connected to their source paths
-- **Deep Nesting**: Works with arbitrarily deep object structures  
-- **Automatic Dependency Tracking**: Computations automatically update when dependencies change
-- **Cross-Context Usage**: Live variables work in any context (async, callbacks, etc.)
-- **Path Equivalence**: Multiple extractions of the same path create equivalent live references
+**Q: Why not just use a framework?**  
+Exactly. Frameworks do this kind of thing for you. The goal here is to show *how the magic can work* using only built-ins.
 
-## ⚠️ The TypeScript Situation
+**Q: Can I use this at work?**  
+Please don’t ship it. Take the ideas—path-based dependency tracking, coercion tricks, proxy interception—and apply them judiciously where appropriate.
 
-This repo uses vanilla JavaScript because TypeScript struggles with these dynamic features:
-- `Symbol.toPrimitive` decisions happen at runtime, not compile time
-- Proxies dynamically create properties that TypeScript can't predict
-- The path tracking is invisible to static analysis
+---
 
-Most production libraries solve this with typed facades that hide the dynamic implementation.
+## Appendix: Concepts
 
-## 🔍 Explore the Code
+1. **Cosplay (`Symbol.toPrimitive`)**  
+   A method objects/functions can implement to decide how they convert to a primitive (string/number/default). Template literals and arithmetic trigger it.
 
-- **`src/reactive.js`** - The complete implementation with dependency tracking
-- **`src/main.js`** - Comprehensive demo showing all the patterns
-- **Console output** - Watch the proxy chains and dependency tracking in real-time
+2. **Wiretapping (`Proxy`)**  
+   Intercepts operations like `get`/`set` on a target object. Perfect for returning dynamic placeholders (like our live primitives) instead of plain values.
 
-## 🤓 Going Deeper
-
-If you want to understand how this works:
-
-1. **Start with the console output** - Every step is logged with emojis
-2. **Read the comments** - The code is heavily documented  
-3. **Modify the demo** - Try breaking things to see what happens
-4. **Check the dependency graph** - See which computations depend on which paths
+3. **Path-based Dependency Graph**  
+   During a computed run, any coercion of a live primitive records its path (e.g., `user.firstName`) as a dependency of that computed. When a path changes, recompute any dependents whose dependency is a prefix/suffix match.
