@@ -79,14 +79,6 @@ All of these patterns create variables that survive complete object replacement.
 - **Cross-Context Usage**: Live variables work in any context (async, callbacks, etc.)
 - **Path Equivalence**: Multiple extractions of the same path create equivalent live references
 
-## 🎯 Real-World Applications
-
-While this demo is intentionally simple, these techniques power production libraries like:
-- **Vue 3's reactivity system** - Uses proxies for observation
-- **MobX** - Uses `Symbol.toPrimitive` for observable values  
-- **Testing frameworks** - Proxy-based mocking and spying
-- **Development tools** - Dynamic instrumentation and debugging
-
 ## ⚠️ The TypeScript Situation
 
 This repo uses vanilla JavaScript because TypeScript struggles with these dynamic features:
@@ -110,9 +102,3 @@ If you want to understand how this works:
 2. **Read the comments** - The code is heavily documented  
 3. **Modify the demo** - Try breaking things to see what happens
 4. **Check the dependency graph** - See which computations depend on which paths
-
-## 🎉 Have Fun!
-
-This is JavaScript at its weirdest and most wonderful. The language's willingness to let you redefine fundamental operations is exactly what makes these elegant abstractions possible.
-
-What will you build with these superpowers?
