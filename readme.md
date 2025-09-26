@@ -1,5 +1,7 @@
 # Cosplay & Wiretapping: JavaScript’s Hidden Superpowers
 
+> NOTE: I also turned this into an experimental reactive state management library for React: https://github.com/overthemike/ripplio
+
 A tiny **teaching demo** that shows how JavaScript can:
  - **Cosplay** as primitives via `Symbol.toPrimitive`
  - **Wiretap** object access with `Proxy`
